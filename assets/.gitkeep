@@ -1,0 +1,8 @@
+Add Expo default assets here before production builds:
+
+- icon.png (1024x1024)
+- splash-icon.png
+- adaptive-icon.png
+- favicon.png
+
+Run `npx create-expo-app@latest temp --template blank-typescript` in another folder and copy the `assets/` directory if needed.
