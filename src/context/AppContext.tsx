@@ -1,3 +1,4 @@
+import * as api from '@/api/api';
 import React, {
   createContext,
   useCallback,
@@ -56,16 +57,16 @@ export function AppProvider({ children }: AppProviderProps) {
 
   useEffect(() => {
     async function loadData() {
-      const [onboardingComplete, storedSettings, storedExpenses] =
-        await Promise.all([
-          getOnboardingComplete(),
-          getJson<UserSettings>(STORAGE_KEYS.settings, defaultSettings),
-          getJson<Expense[]>(STORAGE_KEYS.expenses, []),
-        ]);
+      const [onboardingComplete, storedSettings] = await Promise.all([
+        getOnboardingComplete(),
+        getJson<UserSettings>(STORAGE_KEYS.settings, defaultSettings),
+      ]);
+
+      const serverExpenses = await api.getExpenses();
 
       setHasCompletedOnboarding(onboardingComplete);
       setSettings({ ...defaultSettings, ...storedSettings });
-      setExpenses(storedExpenses);
+      setExpenses(serverExpenses);
       setIsReady(true);
     }
 
@@ -79,6 +80,7 @@ export function AppProvider({ children }: AppProviderProps) {
         setJson(STORAGE_KEYS.settings, next);
         return next;
       });
+
       await setOnboardingComplete(true);
       setHasCompletedOnboarding(true);
     },
@@ -104,23 +106,22 @@ export function AppProvider({ children }: AppProviderProps) {
       expenseType: input.expenseType,
     };
 
-    setExpenses((prev) => {
-      const next = [expense, ...prev];
-      setJson(STORAGE_KEYS.expenses, next);
-      return next;
-    });
+    await api.addExpense(expense);
+
+    const latest = await api.getExpenses();
+    setExpenses(latest);
   }, []);
 
   const deleteExpense = useCallback(async (id: string) => {
-    setExpenses((prev) => {
-      const next = prev.filter((expense) => expense.id !== id);
-      setJson(STORAGE_KEYS.expenses, next);
-      return next;
-    });
+    await api.deleteExpense(id);
+
+    const latest = await api.getExpenses();
+    setExpenses(latest);
   }, []);
 
   const addCategory = useCallback(async (category: string) => {
     const trimmed = category.trim();
+
     if (!trimmed) {
       return;
     }
@@ -129,11 +130,18 @@ export function AppProvider({ children }: AppProviderProps) {
       const exists = prev.categories.some(
         (c) => c.toLowerCase() === trimmed.toLowerCase(),
       );
+
       if (exists) {
         return prev;
       }
-      const next = { ...prev, categories: [...prev.categories, trimmed] };
+
+      const next = {
+        ...prev,
+        categories: [...prev.categories, trimmed],
+      };
+
       setJson(STORAGE_KEYS.settings, next);
+
       return next;
     });
   }, []);
@@ -143,11 +151,14 @@ export function AppProvider({ children }: AppProviderProps) {
       if (prev.categories.length <= 1) {
         return prev;
       }
+
       const next = {
         ...prev,
         categories: prev.categories.filter((item) => item !== category),
       };
+
       setJson(STORAGE_KEYS.settings, next);
+
       return next;
     });
   }, []);
@@ -179,7 +190,11 @@ export function AppProvider({ children }: AppProviderProps) {
     ],
   );
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+    </AppContext.Provider>
+  );
 }
 
 export function useApp(): AppContextValue {
